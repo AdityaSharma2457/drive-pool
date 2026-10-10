@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aeon | Drive files</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Aeon home"><span class="brand-mark">A</span><span>aeon</span></a>
+    <a class="topbar-meta" href="/">← Storage overview</a>
+  </header>
+  <main class="shell drive-shell">
+    <section class="drive-page-heading">
+      <div>
+        <p class="eyebrow">GOOGLE DRIVE</p>
+        <h1>{{ folder.name if folder else 'My Drive' }}</h1>
+        <p class="drive-account-label">{{ email }}</p>
+      </div>
+      <a class="button button-primary" href="/auth/google?login_hint={{ email|urlencode }}">Reconnect access</a>
+    </section>
+
+    {% if notice %}<div class="notice" role="status">{{ notice }}</div>{% endif %}
+    {% if not has_sharing_scope %}
+      <div class="scope-notice" role="status">
+        <span>This account has not granted full Drive access, which Google requires to change file sharing.</span>
+        <a href="/auth/google?login_hint={{ email|urlencode }}">Reconnect {{ email }} to enable sharing</a>
+      </div>
+    {% endif %}
+    {% if shared_link %}
+      <div class="share-result" role="status">
+        <div><strong>Link access is ready</strong><span>Anyone with this link has the selected access.</span></div>
+        <a class="shared-url" href="{{ shared_link }}" target="_blank" rel="noopener noreferrer">Open shared file</a>
+        <button class="button button-secondary copy-link" type="button" data-copy-link="{{ shared_link }}">Copy link</button>
+      </div>
+    {% endif %}
+    {% if error %}
+      <div class="drive-load-error" role="alert">
+        <strong>{{ error }}</strong>
+        <span>Reconnect this account to grant full-drive read and upload access.</span>
+      </div>
+    {% else %}
+      <div class="drive-toolbar">
+        <nav class="breadcrumbs" aria-label="Drive location">
+          <a href="/accounts/{{ email }}/files">My Drive</a>
+          {% if folder %}<span aria-hidden="true">/</span><span aria-current="page">{{ folder.name }}</span>{% endif %}
+        </nav>
+        {% if parent_folder_id %}<a class="button button-secondary" href="/accounts/{{ email }}/files?folder_id={{ parent_folder_id }}">↑ Up one level</a>{% endif %}
+      </div>
+
+      <section class="upload-strip" aria-label="Upload to this folder">
+        <div class="upload-copy"><strong>Upload to {{ folder.name if folder else 'My Drive' }}</strong><span>Files go to {{ email }}</span></div>
+        <form class="upload-form" method="post" action="/accounts/{{ email }}/upload" enctype="multipart/form-data">
+          <input type="hidden" name="folder_id" value="{{ folder_id }}">
+          <label class="file-picker"><span>Choose file</span><input type="file" name="file" required></label>
+          <button class="button button-primary" type="submit">Upload</button>
+        </form>
+      </section>
+
+      <section class="file-section" aria-label="Drive files and folders">
+        <div class="file-header"><span>Name</span><span>Modified</span><span>Size</span><span>Sharing</span></div>
+        {% if files %}
+          <div class="file-list">
+            {% for file in files %}
+              <article class="file-row">
+                <div class="file-name">
+                  <span class="file-type-icon {% if file.is_folder %}folder-type{% endif %}" aria-hidden="true">{% if file.is_folder %}▰{% else %}▤{% endif %}</span>
+                  {% if file.is_folder %}
+                    <a href="/accounts/{{ email }}/files?folder_id={{ file.id }}">{{ file.name }}</a>
+                  {% elif file.webViewLink %}
+                    <a href="{{ file.webViewLink }}" target="_blank" rel="noopener noreferrer">{{ file.name }}</a>
+                  {% else %}
+                    <span>{{ file.name }}</span>
+                  {% endif %}
+                </div>
+                <time>{{ file.modifiedTime[:10] if file.modifiedTime else '—' }}</time>
+                <span class="file-size">{{ format_bytes(file.size|int if file.size else none) }}</span>
+                {% if not file.is_folder %}
+                  {% if has_sharing_scope %}
+                    <details class="file-share">
+                      <summary aria-label="Sharing options for {{ file.name }}" title="Share file">Share</summary>
+                      <div class="share-panel">
+                        <strong>{{ file.name }}</strong>
+                        {% if file.link_permission %}
+                          <span class="permission-status">Anyone with the link: {{ {'reader': 'Viewer', 'commenter': 'Commenter', 'writer': 'Editor'}.get(file.link_permission.role, file.link_permission.role) }}</span>
+                        {% else %}
+                          <span class="permission-status">Link access is off</span>
+                        {% endif %}
+                        <form method="post" action="/accounts/{{ email }}/files/{{ file.id }}/share">
+                          <input type="hidden" name="folder_id" value="{{ folder_id }}">
+                          <label>Link access
+                            <select name="role">
+                              <option value="reader" {% if file.link_permission and file.link_permission.role == 'reader' %}selected{% endif %}>Viewer</option>
+                              <option value="commenter" {% if file.link_permission and file.link_permission.role == 'commenter' %}selected{% endif %}>Commenter</option>
+                              <option value="writer" {% if file.link_permission and file.link_permission.role == 'writer' %}selected{% endif %}>Editor</option>
+                              {% if file.link_permission %}<option value="none">Remove link access</option>{% endif %}
+                            </select>
+                          </label>
+                          <button class="button button-primary" type="submit">Save access</button>
+                        </form>
+                      </div>
+                    </details>
+                  {% else %}
+                    <a class="file-share reconnect-share" href="/auth/google?login_hint={{ email|urlencode }}">Enable</a>
+                  {% endif %}
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="file-empty">This folder is empty.</div>
+        {% endif %}
+        {% if next_page_url %}
+          <nav class="file-pagination" aria-label="File pages">
+            <a class="button button-secondary" href="{{ next_page_url }}">Next page</a>
+          </nav>
+        {% endif %}
+      </section>
+    {% endif %}
+    <footer><span>Aeon</span><span>Files shown directly from Google Drive</span></footer>
+  </main>
+  <script>
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy-link]");
+      if (!button) return;
+      await navigator.clipboard.writeText(button.dataset.copyLink);
+      button.textContent = "Copied";
+    });
+  </script>
+</body>
+</html>

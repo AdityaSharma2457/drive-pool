@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aeon | Storage overview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Aeon home"><span class="brand-mark">A</span><span>aeon</span></a>
+    <div class="topbar-meta"><span class="status-dot"></span> Personal workspace</div>
+  </header>
+
+  <main class="shell">
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">STORAGE OVERVIEW</p>
+        <h1>Your drives, <span>in one view.</span></h1>
+      </div>
+      <a class="button button-primary" href="/auth/google"><span aria-hidden="true">+</span> Connect a drive</a>
+    </section>
+
+    {% if notice %}<div class="notice" role="status">{{ notice }}</div>{% endif %}
+    {% if not client_configured %}
+      <div class="setup-note"><strong>Google OAuth is not configured yet.</strong> Add your OAuth client file as <code>credentials.json</code> and set the values from <code>.env.example</code>.</div>
+    {% endif %}
+
+    <section class="overview" aria-label="Combined storage summary">
+      <div class="overview-top">
+        <div>
+          <p class="eyebrow">KNOWN FINITE QUOTA</p>
+          <div class="storage-total">{{ format_bytes(summary.capacity_bytes) }} <span>across connected drives</span></div>
+        </div>
+        <div class="account-count"><span class="count-icon">↗</span><span><strong>{{ summary.connected_accounts }}</strong> connected<br>Google account{% if summary.connected_accounts != 1 %}s{% endif %}</span></div>
+      </div>
+      <div class="progress-track" role="progressbar" aria-label="Finite quota used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ summary.used_percent|round|int }}">
+        <div class="progress-used" style="width: {{ summary.used_percent }}%"></div>
+      </div>
+      <div class="storage-legend">
+        <span><i class="legend-dot used-dot"></i>{{ format_bytes(summary.finite_used_bytes) }} used</span>
+        <span><i class="legend-dot free-dot"></i>{{ format_bytes(summary.available_bytes) }} available</span>
+        <span class="legend-note">Finite quota known for {{ summary.finite_quota_accounts }} of {{ summary.connected_accounts }} drives</span>
+      </div>
+      <p class="quota-caveat">Accounts stay separate in Google Drive; this dashboard does not merge accounts or increase their quota.</p>
+    </section>
+
+    <section class="drives-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">CONNECTED ACCOUNTS</p><h2>Drive accounts</h2></div>
+        <span class="section-count">{{ summary.connected_accounts }} total</span>
+      </div>
+      {% if accounts %}
+        <div class="drive-list">
+          {% for drive in accounts %}
+            <article class="drive-row">
+              <div class="drive-identity">
+                <div class="drive-icon" aria-hidden="true">G</div>
+                <div>
+                  <strong>{{ drive.display_name or drive.email }}</strong>
+                  <span>{{ drive.email }}</span>
+                  <a class="drive-open" href="/accounts/{{ drive.email }}/files">Open drive <span aria-hidden="true">↗</span></a>
+                </div>
+              </div>
+              {% if drive.error %}
+                <div class="drive-error"><span class="error-dot"></span>{{ drive.error }}</div>
+                <div class="drive-usage muted">Quota unavailable</div>
+              {% else %}
+                <div class="mini-meter"><div style="width: {{ (drive.used_bytes / drive.limit_bytes * 100) if drive.limit_bytes else 0 }}%"></div></div>
+                <div class="drive-usage"><strong>{{ format_bytes(drive.used_bytes) }}</strong><span>of {{ format_bytes(drive.limit_bytes) }}</span></div>
+              {% endif %}
+              <form method="post" action="/accounts/{{ drive.email }}/disconnect" onsubmit="return confirm('Disconnect {{ drive.email }}?')">
+                <button class="icon-button" type="submit" aria-label="Disconnect {{ drive.email }}" title="Disconnect drive">×</button>
+              </form>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state"><div class="empty-mark">+</div><h3>No drives connected</h3><p>Connect a Google account to see its storage usage here.</p><a href="/auth/google" class="text-link">Connect your first drive <span>↗</span></a></div>
+      {% endif %}
+    </section>
+    <footer><span>Aeon</span><span>Quota details provided by Google Drive</span></footer>
+  </main>
+</body>
+</html>
